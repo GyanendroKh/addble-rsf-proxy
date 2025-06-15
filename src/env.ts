@@ -13,7 +13,10 @@ export const env = createEnv({
     SUBSCRIBER_URI: z.string().url(),
 
     KEY_ID: z.string(),
-    KEY_SECRET: z.string()
+    KEY_SECRET: z.string(),
+
+    ONDC_UKID: z.string(),
+    ONDC_PRIVATE_KEY: z.string()
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true
