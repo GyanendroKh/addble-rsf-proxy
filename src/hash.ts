@@ -1,20 +1,13 @@
-// import { createHash } from 'blake2';
-// import nacl from 'tweetnacl';
 import sodium from 'libsodium-wrappers';
 import { z } from 'zod/v4';
 
 function createOndcSigningString(
-  message: string,
+  message: Uint8Array,
   createdAt: number,
   expriesAt: number
 ) {
-  // const digest = createHash('blake2b', {
-  //   digestLength: 64
-  // })
-  //   .update(Buffer.from(message))
-  //   .digest('base64');
   const digest = sodium.to_base64(
-    sodium.crypto_generichash(64, sodium.from_string(message)),
+    sodium.crypto_generichash(64, message),
     sodium.base64_variants.ORIGINAL
   );
 
@@ -27,23 +20,20 @@ function createOndcSigningString(
   return parts.join('\n');
 }
 
-function signOndcMessage(message: string, privateKey: string) {
-  // const signed = nacl.sign.detached(message, privateKey);
-  // return Buffer.from(signed).toString('base64');
-
-  const signed = sodium.crypto_sign_detached(
-    message,
-    sodium.from_base64(privateKey, sodium.base64_variants.ORIGINAL)
+function signOndcMessage(message: string, privateKey: Uint8Array) {
+  const signed = sodium.to_base64(
+    sodium.crypto_sign_detached(message, privateKey),
+    sodium.base64_variants.ORIGINAL
   );
 
-  return sodium.to_base64(signed, sodium.base64_variants.ORIGINAL);
+  return signed;
 }
 
 export function createOndcSignature(opts: {
-  message: string;
+  message: Uint8Array;
   createdAt: number;
   expiresAt: number;
-  privateKey: string;
+  privateKey: Uint8Array;
   subId: string;
   keyId: string;
 }) {
@@ -92,8 +82,8 @@ export function extractHeaderParts(
 
 export async function verifyOndcSignature(
   parts: z.infer<typeof headerPartsSchema>,
-  rawBody: string,
-  getPublicKey: (subId: string, keyId: string) => Promise<string | null>
+  rawBody: Uint8Array,
+  getPublicKey: (subId: string, keyId: string) => Promise<Uint8Array | null>
 ) {
   const [subId, keyId] = parts.keyId.split('|');
 
@@ -113,16 +103,10 @@ export async function verifyOndcSignature(
     parts.expires
   );
 
-  // const verified = nacl.sign.detached.verify(
-  //   Buffer.from(signingString),
-  //   Buffer.from(parts.signature, 'utf8'),
-  //   Buffer.from(publicKey, 'base64')
-  // );
-
   const verified = sodium.crypto_sign_verify_detached(
     sodium.from_base64(parts.signature, sodium.base64_variants.ORIGINAL),
     sodium.from_string(signingString),
-    sodium.from_base64(publicKey, sodium.base64_variants.ORIGINAL)
+    publicKey
   );
 
   return verified;

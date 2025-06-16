@@ -4,8 +4,6 @@ import { Router } from 'express';
 import proxy from 'express-http-proxy';
 import nacl from 'tweetnacl';
 
-import { extractHeaderParts, verifyOndcSignature } from './hash.js';
-
 const FROM_ONDC_URL = ['/on_settle', '/on_report', '/on_recon'];
 
 export function createProxy(opts: {
@@ -18,12 +16,17 @@ export function createProxy(opts: {
     keyId: string;
     secretKey: string;
   };
-  generateOndcSignature: (body: string) => string | Promise<string>;
+  generateOndcSignature: (body: Buffer) => string | Promise<string>;
+  validateOndcSignature: (
+    authorization: string,
+    body: Buffer
+  ) => Promise<boolean>;
 }) {
   const router = Router();
 
-  const cache = createCache()
-    .define('getRsfPublicKey', async function (keyId: string) {
+  const cache = createCache().define(
+    'getRsfPublicKey',
+    async function (keyId: string) {
       const res = await fetch(new URL('/public/auth/keys', opts.rsfUrl), {
         method: 'GET'
       });
@@ -44,54 +47,8 @@ export function createProxy(opts: {
       }
 
       return key;
-    })
-    .define(
-      'getOndcSubscriberPublicKey',
-      async function (data: {
-        subId: string;
-        domain: string;
-        country: string;
-        ukid: string;
-      }) {
-        const body = JSON.stringify({
-          subscriber_id: data.subId,
-          doamin: data.domain,
-          country: data.country
-        });
-
-        let signature = opts.generateOndcSignature(body);
-        if (typeof signature !== 'string') {
-          signature = await signature;
-        }
-
-        const res = await fetch(
-          'https://preprod.registry.ondc.org/v2.0/lookup',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: signature
-            },
-            body
-          }
-        );
-
-        if (!res.ok) {
-          console.log('lookup', res.status, await res.text());
-          return null;
-        }
-
-        const resBody = (await res.json().catch(err => {
-          console.error(err);
-
-          return undefined;
-        })) as Array<{ ukId: string; signing_public_key: string }> | undefined;
-
-        const key = resBody?.find(i => i.ukId === data.ukid);
-
-        return key?.signing_public_key ?? null;
-      }
-    );
+    }
+  );
 
   router.post(
     '/rsf',
@@ -168,11 +125,11 @@ export function createProxy(opts: {
             throw new Error('Invalid Signature');
           }
 
-          let body: string | null = null;
+          let body: Buffer | null = null;
           if (typeof req.body === 'string') {
-            body = req.body;
+            body = Buffer.from(req.body, 'utf8');
           } else if (req.body instanceof Buffer) {
-            body = req.body.toString('utf8');
+            body = req.body;
           } else {
             throw new Error('Invalid Body');
           }
@@ -210,34 +167,16 @@ export function createProxy(opts: {
           throw new Error('No Authorization header found');
         }
 
-        const parts = extractHeaderParts(authorization);
-
-        if (!parts) {
-          throw new Error('Invalid Authorization header');
-        }
-
-        let body: string | null = null;
+        let body: Buffer | null = null;
         if (typeof req.body === 'string') {
-          body = req.body;
+          body = Buffer.from(req.body, 'utf8');
         } else if (req.body instanceof Buffer) {
-          body = req.body.toString('utf8');
+          body = req.body;
         } else {
           throw new Error('Invalid Body');
         }
 
-        const isValid = await verifyOndcSignature(
-          parts,
-          body,
-          (subId: string, keyId: string) => {
-            return cache.getOndcSubscriberPublicKey({
-              subId: subId,
-              ukid: keyId,
-              domain: 'ONDC:NTS10',
-              country: 'IN'
-            });
-          }
-        );
-
+        const isValid = await opts.validateOndcSignature(authorization, body);
         if (!isValid) {
           throw new Error('Invalid Signature.');
         }
