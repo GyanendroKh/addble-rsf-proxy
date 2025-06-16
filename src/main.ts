@@ -1,5 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import express from 'express';
 import sodium from 'libsodium-wrappers';
+import { pino } from 'pino';
+import { pinoHttp } from 'pino-http';
 
 import { env } from './env.js';
 import {
@@ -10,6 +13,20 @@ import {
 import { createProxy } from './proxy.js';
 
 const app = express();
+const logger = pino();
+
+app.disable('etag');
+app.disable('x-powered-by');
+
+app.use(
+  pinoHttp({
+    logger: logger,
+    genReqId: () => randomUUID(),
+    customReceivedMessage: req => {
+      return `[${req.method}] ${req.url}`;
+    }
+  })
+);
 
 sodium.ready.catch(console.error);
 
@@ -124,9 +141,9 @@ const getOndcSubscriberPublicKey = async (subId: string, keyId: string) => {
 
 app.listen(env.PORT, err => {
   if (err) {
-    console.error('Failed to start server.', err);
+    logger.error(err, 'Failed to start server.');
     process.exit(1);
   }
 
-  console.log('Listening on :' + env.PORT);
+  logger.info('Server started on :%d', env.PORT);
 });
