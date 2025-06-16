@@ -7,9 +7,7 @@
     "start": "tsx watch --clear-screen=false ./src/main.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "build": "tsc",
-    "docker:build": "docker build . -t gcr.io/preprod-panda-unified/panda-rsf-proxy-image --platform linux/amd64",
-    "docker:deploy": "docker push gcr.io/preprod-panda-unified/panda-rsf-proxy-image && gcloud run deploy panda-rsf-proxy --image gcr.io/preprod-panda-unified/panda-rsf-proxy-image --project addble-market-test --region asia-south1"
+    "build": "tsc"
   },
   "packageManager": "pnpm@10.11.0",
   "dependencies": {

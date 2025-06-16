@@ -35,7 +35,7 @@ COPY --from=build /app/package.json \
 
 RUN pnpm --frozen-lockfile --prod install
 
-COPY --from=build /app/dist/src ./
+COPY --from=build /app/dist ./
 
 RUN chown -R server:server .
 
