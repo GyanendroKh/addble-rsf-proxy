@@ -4,7 +4,7 @@ import { Router } from 'express';
 import proxy from 'express-http-proxy';
 import nacl from 'tweetnacl';
 
-const FROM_ONDC_URL = ['/on_settle', '/on_report', '/on_recon'];
+const FROM_ONDC_URL = ['/on_settle', '/on_report', '/recon', '/on_recon'];
 
 export function createProxy(opts: {
   rsfUrl: string;
@@ -64,8 +64,8 @@ export function createProxy(opts: {
 
         const url = new URL(forwardUrl);
 
-        // @ts-expect-error No type for this
-        r.forwardUrl = url.href.replace(url.origin, '');
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        (r as any).forwardUrl = url.href.replace(url.origin, '');
 
         return url.origin;
       },
