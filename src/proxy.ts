@@ -6,6 +6,20 @@ import nacl from 'tweetnacl';
 
 const FROM_ONDC_URL = ['/on_settle', '/on_report', '/recon', '/on_recon'];
 
+const allowedHeaders = [
+  'user-agent',
+  'content-type',
+  'content-length',
+  'accept',
+  'accept-encoding',
+  'accept-language',
+  'accept-charset',
+  'authorization',
+  'host',
+  'origin',
+  'referer'
+];
+
 export function createProxy(opts: {
   rsfUrl: string;
   subscriber: {
@@ -142,9 +156,11 @@ export function createProxy(opts: {
 
           r.headers['authorization'] = ondcSignature;
 
-          delete r.headers['x-forward-to'];
-          delete r.headers['x-key-id'];
-          delete r.headers['x-signature'];
+          for (const h of Object.keys(r.headers)) {
+            if (!allowedHeaders.includes(h)) {
+              delete r.headers[h];
+            }
+          }
 
           return r;
         }
