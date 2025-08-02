@@ -30,7 +30,10 @@ export function createProxy(opts: {
     keyId: string;
     secretKey: string;
   };
-  generateOndcSignature: (body: Buffer) => string | Promise<string>;
+  generateOndcSignature: (
+    body: Buffer,
+    invalid?: boolean
+  ) => string | Promise<string>;
   validateOndcSignature: (
     authorization: string,
     body: Buffer
@@ -38,31 +41,32 @@ export function createProxy(opts: {
 }) {
   const router = Router();
 
-  const cache = createCache().define(
-    'getRsfPublicKey',
-    async function (keyId: string) {
-      const res = await fetch(new URL('/public/auth/keys', opts.rsfUrl), {
-        method: 'GET'
-      });
+  const cache = createCache({
+    ttl: 60 * 10,
+    stale: 60 * 10,
+    storage: { type: 'memory' }
+  }).define('getRsfPublicKey', async function (keyId: string) {
+    const res = await fetch(new URL('/public/auth/keys', opts.rsfUrl), {
+      method: 'GET'
+    });
 
-      if (!res.ok) {
-        return null;
-      }
-
-      const data = (await res.json().catch(err => {
-        console.error(err);
-
-        return undefined;
-      })) as { keyId: string; publicKey: string }[] | undefined;
-
-      const key = data?.find(i => i.keyId === keyId);
-      if (!key) {
-        return null;
-      }
-
-      return key;
+    if (!res.ok) {
+      return null;
     }
-  );
+
+    const data = (await res.json().catch(err => {
+      console.error(err);
+
+      return undefined;
+    })) as { keyId: string; publicKey: string }[] | undefined;
+
+    const key = data?.find(i => i.keyId === keyId);
+    if (!key) {
+      return null;
+    }
+
+    return key;
+  });
 
   router.post(
     '/rsf',
@@ -148,13 +152,18 @@ export function createProxy(opts: {
             throw new Error('Invalid Body');
           }
 
-          const signatureRes = opts.generateOndcSignature(body);
+          const invalid = r.headers['x-sig-invalid'] === 'Y';
+          const removeSig = r.headers['x-sig-remove'] === 'Y';
+
+          const signatureRes = opts.generateOndcSignature(body, invalid);
           const ondcSignature =
             typeof signatureRes === 'string'
               ? signatureRes
               : await signatureRes;
 
-          r.headers['authorization'] = ondcSignature;
+          if (!removeSig) {
+            r.headers['authorization'] = ondcSignature;
+          }
 
           for (const h of Object.keys(r.headers)) {
             if (!allowedHeaders.includes(h)) {

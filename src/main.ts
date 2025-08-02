@@ -41,12 +41,12 @@ app.use(
       keyId: env.KEY_ID,
       secretKey: env.KEY_SECRET
     },
-    generateOndcSignature(body) {
+    generateOndcSignature(body, invalid) {
       return createOndcSignature({
         message: body,
         createdAt: Math.floor(Date.now() / 1000),
         expiresAt: Math.floor(Date.now() / 1000 + 60),
-        subId: env.SUBSCRIBER_ID,
+        subId: env.SUBSCRIBER_ID + (invalid ? '-invalid' : ''),
         keyId: env.ONDC_UKID,
         privateKey: sodium.from_base64(
           env.ONDC_PRIVATE_KEY,
@@ -62,11 +62,11 @@ app.use(
 
       const [subId] = parts.keyId.split('|');
 
-      if (subId === 'sa_nocs.nbbl.com') {
-        console.log('skipping validation for sa_nocs.nbbl.com');
-        console.log('header parts', parts);
-        console.log('signature', authorization);
-
+      if (
+        subId === 'sa_nocs.nbbl.com' ||
+        subId === 'rsf-mock-service.ondc.org/seller_protocol_server' ||
+        subId === 'rsf-mock-service.ondc.org/seller_protocol_server_preprod'
+      ) {
         return true;
       }
 
@@ -128,7 +128,7 @@ const getOndcSubscriberPublicKey = async (subId: string, keyId: string) => {
     return undefined;
   })) as Array<{ ukId: string; signing_public_key: string }> | undefined;
 
-  const key = resBody?.find(i => i.ukId === keyId);
+  const key = resBody?.find?.(i => i.ukId === keyId);
 
   if (!key) {
     console.log('lookup no kid', { subId, keyId }, resBody);
